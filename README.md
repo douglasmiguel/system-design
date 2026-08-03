@@ -26,7 +26,6 @@ Use the live calculator at
 - Vanilla JavaScript
 - Tailwind CSS 3
 - GitHub Actions for CI/CD
-- Nginx static hosting on the BeeDev server
 
 ## Run locally
 
@@ -76,20 +75,9 @@ npm run build:css -- --watch
 ├── tailwind.config.js          # Theme and content configuration
 ├── styles.css                  # Generated production stylesheet
 ├── downloads/                  # Excalidraw assets
-├── .github/workflows/          # CI/CD workflow
-└── docs/production-deployment.md
+└── .github/workflows/          # CI/CD workflow
 ```
 
-`styles.css` is generated but intentionally committed because the production
-site is deployed as static files. CI rebuilds it and fails if it differs from
+`styles.css` is generated but intentionally committed so the repository works
+as a self-contained static site. CI rebuilds it and fails if it differs from
 the committed version.
-
-## Deployment
-
-Pull requests run the build and generated-CSS checks. A successful push to
-`main` deploys the packaged static site to the BeeDev server and verifies the
-public HTTPS endpoint.
-
-See [Production deployment](docs/production-deployment.md) for the deployment
-flow, server target, required GitHub secrets, safety checks, and rollback
-procedure.
