@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A transparent back-of-the-envelope calculator for estimating traffic, bandwidth, compute, and storage capacity."
+    />
+    <title>BOTEC — System Design Calculator</title>
+    <link rel="icon" type="image/png" href="./favicon-transparent.png" />
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      [x-cloak] { display: none !important; }
+      input[type='number']::-webkit-inner-spin-button,
+      input[type='number']::-webkit-outer-spin-button { appearance: none; margin: 0; }
+      input[type='number'] { appearance: textfield; }
+      input[type='range'] { accent-color: #d9ff66; }
+      .noise {
+        background-image: radial-gradient(rgba(255,255,255,.055) 1px, transparent 1px);
+        background-size: 24px 24px;
+        mask-image: linear-gradient(to bottom, black, transparent 85%);
+      }
+      .result-enter { animation: resultEnter 240ms ease-out; }
+      @keyframes resultEnter {
+        from { opacity: .45; transform: translateY(3px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-ink text-slate-100 antialiased selection:bg-acid selection:text-ink">
+    <div class="noise pointer-events-none fixed inset-0 opacity-40"></div>
+    <div class="pointer-events-none fixed left-1/2 top-0 h-96 w-[42rem] -translate-x-1/2 rounded-full bg-acid/5 blur-3xl"></div>
+
+    <main class="relative mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:px-10 lg:py-12">
+      <header class="mb-10 flex flex-col gap-6 border-b border-line pb-8 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div class="mb-4 inline-flex items-center gap-2 rounded-full border border-acid/20 bg-acid/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-acid">
+            <span class="h-1.5 w-1.5 rounded-full bg-acid shadow-[0_0_12px_#d9ff66]"></span>
+            System design field notes
+          </div>
+          <h1 class="max-w-3xl text-4xl font-semibold tracking-[-0.045em] text-white sm:text-5xl lg:text-6xl">
+            Size the system<br class="hidden sm:block" /> before you draw it.
+          </h1>
+          <p class="mt-4 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">
+            A quick, inspectable back-of-the-envelope estimate for request load, peak capacity, compute, data transfer, and optional storage growth.
+          </p>
+        </div>
+        <button
+          id="resetButton"
+          type="button"
+          class="group inline-flex w-fit items-center gap-2 rounded-lg border border-line bg-panel px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-acid/60"
+        >
+          <svg class="h-4 w-4 transition-transform group-hover:-rotate-45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66L20 8.68"/><path d="M20 4v4.68h-4.68"/></svg>
+          Reset example
+        </button>
+      </header>
+
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)]">
+        <section class="rounded-2xl border border-line bg-panel/90 p-5 shadow-glow sm:p-7" aria-labelledby="inputs-title">
+          <div class="mb-7 flex items-start justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">01 / Inputs</p>
+              <h2 id="inputs-title" class="mt-2 text-2xl font-semibold tracking-tight text-white">Traffic assumptions</h2>
+            </div>
+            <span class="rounded-md bg-slate-800 px-2.5 py-1 font-mono text-xs text-slate-400">editable</span>
+          </div>
+
+          <form id="calculatorForm" class="space-y-5">
+            <label class="block">
+              <span class="mb-2 flex items-center justify-between gap-4 text-sm font-medium text-slate-300">
+                Daily active users
+                <span class="text-xs font-normal text-slate-500">DAU</span>
+              </span>
+              <div class="flex overflow-hidden rounded-xl border border-line bg-ink/70 transition focus-within:border-acid/60 focus-within:ring-2 focus-within:ring-acid/10">
+                <input id="dailyUsers" name="dailyUsers" type="number" min="0" step="1000" value="500000000" class="min-w-0 flex-1 bg-transparent px-4 py-3.5 font-mono text-base text-white outline-none" />
+                <span class="flex items-center border-l border-line px-4 text-sm text-slate-500">users</span>
+              </div>
+              <span class="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                <svg class="h-3.5 w-3.5 text-acid/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 7h8M8 12h5M8 17h3"/><rect x="3" y="3" width="18" height="18" rx="4"/></svg>
+                Approximately <output id="dailyUsersReadable" for="dailyUsers" class="font-medium text-slate-300">500 million</output>
+              </span>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 flex items-center justify-between gap-4 text-sm font-medium text-slate-300">
+                Requests per user per day
+                <span class="text-xs font-normal text-slate-500">average</span>
+              </span>
+              <div class="flex overflow-hidden rounded-xl border border-line bg-ink/70 transition focus-within:border-acid/60 focus-within:ring-2 focus-within:ring-acid/10">
+                <input id="requestsPerUser" name="requestsPerUser" type="number" min="0" step="1" value="20" class="min-w-0 flex-1 bg-transparent px-4 py-3.5 font-mono text-base text-white outline-none" />
+                <span class="flex items-center border-l border-line px-4 text-sm text-slate-500">req/user</span>
+              </div>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 flex items-center justify-between gap-4 text-sm font-medium text-slate-300">
+                Peak traffic multiplier
+                <output id="peakMultiplierOutput" for="peakMultiplier" class="font-mono text-sm text-acid">3×</output>
+              </span>
+              <input id="peakMultiplier" name="peakMultiplier" type="range" min="1" max="10" step="0.5" value="3" class="h-2 w-full cursor-pointer rounded-full bg-slate-800" />
+              <span class="mt-2 block text-xs leading-5 text-slate-500">Accounts for daily bursts instead of sizing only for the 24-hour average.</span>
+            </label>
+
+            <div class="grid gap-5 sm:grid-cols-2">
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-300">Server capacity</span>
+                <div class="flex overflow-hidden rounded-xl border border-line bg-ink/70 transition focus-within:border-acid/60">
+                  <input id="serverCapacity" name="serverCapacity" type="number" min="1" step="50" value="1000" class="min-w-0 flex-1 bg-transparent px-4 py-3.5 font-mono text-base text-white outline-none" />
+                  <span class="flex items-center border-l border-line px-3 text-xs text-slate-500">RPS</span>
+                </div>
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-300">Target utilisation</span>
+                <div class="flex overflow-hidden rounded-xl border border-line bg-ink/70 transition focus-within:border-acid/60">
+                  <input id="targetUtilization" name="targetUtilization" type="number" min="1" max="100" step="5" value="70" class="min-w-0 flex-1 bg-transparent px-4 py-3.5 font-mono text-base text-white outline-none" />
+                  <span class="flex items-center border-l border-line px-3 text-xs text-slate-500">%</span>
+                </div>
+                <span class="mt-2 block text-xs leading-5 text-slate-500">Leaves runtime headroom; failover capacity is considered separately.</span>
+              </label>
+            </div>
+
+            <details class="group rounded-xl border border-line bg-ink/40 open:bg-ink/70">
+              <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3.5 text-sm font-medium text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-acid/50">
+                Extended metrics
+                <svg class="h-4 w-4 text-slate-500 transition-transform group-open:rotate-45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              </summary>
+              <div class="grid gap-5 border-t border-line p-4 sm:grid-cols-2">
+                <label class="block">
+                  <span class="mb-2 block text-sm text-slate-400">Average request size</span>
+                  <div class="flex overflow-hidden rounded-lg border border-line bg-panel">
+                    <input id="requestSize" name="requestSize" type="number" min="0" step="0.1" value="2" class="min-w-0 flex-1 bg-transparent px-3 py-3 font-mono text-sm text-white outline-none" />
+                    <span class="flex items-center border-l border-line px-3 text-xs text-slate-500">KB</span>
+                  </div>
+                </label>
+                <label class="block">
+                  <span class="mb-2 block text-sm text-slate-400">Average response size</span>
+                  <div class="flex overflow-hidden rounded-lg border border-line bg-panel">
+                    <input id="responseSize" name="responseSize" type="number" min="0" step="0.1" value="25" class="min-w-0 flex-1 bg-transparent px-3 py-3 font-mono text-sm text-white outline-none" />
+                    <span class="flex items-center border-l border-line px-3 text-xs text-slate-500">KB</span>
+                  </div>
+                </label>
+              </div>
+            </details>
+          </form>
+        </section>
+
+        <section class="rounded-2xl border border-line bg-panel/90 p-5 shadow-glow sm:p-7" aria-labelledby="results-title" aria-live="polite">
+          <div class="mb-7 flex items-start justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">02 / Estimate</p>
+              <h2 id="results-title" class="mt-2 text-2xl font-semibold tracking-tight text-white">Capacity snapshot</h2>
+            </div>
+            <span id="capacityStatus" class="inline-flex items-center gap-2 rounded-full border border-acid/20 bg-acid/5 px-3 py-1 text-xs font-medium text-acid">
+              <span class="h-1.5 w-1.5 rounded-full bg-acid"></span>
+              Peak-aware
+            </span>
+          </div>
+
+          <div id="resultGrid" class="grid gap-3 sm:grid-cols-2">
+            <article class="rounded-xl border border-line bg-ink/65 p-5 sm:col-span-2">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm text-slate-500">Baseline service instances</p>
+                  <p id="serversRequired" class="mt-2 font-mono text-4xl font-semibold tracking-tight text-acid sm:text-5xl">—</p>
+                </div>
+                <div class="rounded-lg border border-acid/20 bg-acid/5 p-2.5 text-acid">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg>
+                </div>
+              </div>
+              <p id="serverFormula" class="mt-4 border-t border-line pt-4 font-mono text-xs leading-5 text-slate-500">—</p>
+            </article>
+
+            <article class="rounded-xl border border-line bg-ink/65 p-5">
+              <p class="text-sm text-slate-500">Requests / day</p>
+              <p id="requestsPerDay" class="mt-2 font-mono text-2xl font-medium tracking-tight text-white">—</p>
+              <p class="mt-1 text-xs text-slate-600">DAU × requests per user</p>
+            </article>
+            <article class="rounded-xl border border-line bg-ink/65 p-5">
+              <p class="text-sm text-slate-500">Average requests / sec</p>
+              <p id="averageRps" class="mt-2 font-mono text-2xl font-medium tracking-tight text-white">—</p>
+              <p class="mt-1 text-xs text-slate-600">Requests / 86,400 seconds</p>
+            </article>
+            <article class="rounded-xl border border-sky/20 bg-sky/5 p-5">
+              <p class="text-sm text-sky/70">Peak requests / sec</p>
+              <p id="peakRps" class="mt-2 font-mono text-2xl font-medium tracking-tight text-sky">—</p>
+              <p id="peakFormula" class="mt-1 text-xs text-sky/40">—</p>
+            </article>
+            <article class="rounded-xl border border-line bg-ink/65 p-5">
+              <p class="text-sm text-slate-500">Effective RPS / server</p>
+              <p id="effectiveCapacity" class="mt-2 font-mono text-2xl font-medium tracking-tight text-white">—</p>
+              <p id="utilizationNote" class="mt-1 text-xs text-slate-600">—</p>
+            </article>
+            <article class="rounded-xl border border-line bg-ink/65 p-5">
+              <p class="text-sm text-slate-500">Daily data transfer</p>
+              <p id="dailyTransfer" class="mt-2 font-mono text-2xl font-medium tracking-tight text-white">—</p>
+              <p id="transferNote" class="mt-1 text-xs text-slate-600">request + response payload</p>
+            </article>
+            <article class="rounded-xl border border-line bg-ink/65 p-5">
+              <p class="text-sm text-slate-500">Peak network throughput</p>
+              <p id="peakBandwidth" class="mt-2 font-mono text-2xl font-medium tracking-tight text-white">—</p>
+              <p class="mt-1 text-xs text-slate-600">payload only; excludes protocol overhead</p>
+            </article>
+          </div>
+          <p class="mt-4 text-xs leading-5 text-slate-500">
+            Throughput baseline only. In an interview, add availability capacity explicitly—for example N+1, one-zone loss, or a stated failover policy.
+          </p>
+        </section>
+      </div>
+
+      <section class="mt-6 rounded-2xl border border-line bg-panel/90 p-5 shadow-glow sm:p-7" aria-labelledby="storage-title">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">03 / Optional module</p>
+            <h2 id="storage-title" class="mt-2 text-2xl font-semibold tracking-tight text-white">Storage footprint</h2>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
+              Use this when retained data materially shapes the design—for example media, documents, events, backups, or long-lived user content.
+            </p>
+          </div>
+          <span class="w-fit rounded-full border border-sky/20 bg-sky/5 px-3 py-1 text-xs font-medium text-sky">Open only when relevant</span>
+        </div>
+
+        <details id="storageModule" class="group mt-6 overflow-hidden rounded-xl border border-line bg-ink/40 open:bg-ink/65">
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-acid/50 sm:px-5">
+            <span>
+              <span class="block text-sm font-medium text-slate-200">Estimate daily growth and retained capacity</span>
+              <span class="mt-1 block text-xs leading-5 text-slate-500">Items × average payload, adjusted for metadata, retention, and durability copies.</span>
+            </span>
+            <svg class="h-5 w-5 shrink-0 text-slate-500 transition-transform group-open:rotate-45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </summary>
+
+          <div class="grid gap-6 border-t border-line p-4 sm:p-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <form id="storageForm" class="grid gap-5 sm:grid-cols-2" aria-label="Storage assumptions">
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-300">New items per day</span>
+                <div class="flex overflow-hidden rounded-xl border border-line bg-panel transition focus-within:border-acid/60">
+                  <input id="objectsPerDay" name="objectsPerDay" type="number" min="0" step="1000" value="250000" class="min-w-0 flex-1 bg-transparent px-4 py-3.5 font-mono text-base text-white outline-none" />
+                  <span class="flex items-center border-l border-line px-3 text-xs text-slate-500">items</span>
+                </div>
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-300">Average item size</span>
+                <div class="flex overflow-hidden rounded-xl border border-line bg-panel transition focus-within:border-acid/60">
+                  <input id="objectSizeMb" name="objectSizeMb" type="number" min="0" step="0.1" value="50" class="min-w-0 flex-1 bg-transparent px-4 py-3.5 font-mono text-base text-white outline-none" />
+                  <span class="flex items-center border-l border-line px-3 text-xs text-slate-500">MB</span>
+                </div>
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-300">Metadata / derivative</span>
+                <div class="flex overflow-hidden rounded-xl border border-line bg-panel transition focus-within:border-acid/60">
+                  <input id="metadataSizeKb" name="metadataSizeKb" type="number" min="0" step="1" value="20" class="min-w-0 flex-1 bg-transparent px-4 py-3.5 font-mono text-base text-white outline-none" />
+                  <span class="flex items-center border-l border-line px-3 text-xs text-slate-500">KB/item</span>
+                </div>
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-300">Retention period</span>
+                <div class="flex overflow-hidden rounded-xl border border-line bg-panel transition focus-within:border-acid/60">
+                  <input id="retentionDays" name="retentionDays" type="number" min="0" step="1" value="365" class="min-w-0 flex-1 bg-transparent px-4 py-3.5 font-mono text-base text-white outline-none" />
+                  <span class="flex items-center border-l border-line px-3 text-xs text-slate-500">days</span>
+                </div>
+              </label>
+              <label class="block sm:col-span-2">
+                <span class="mb-2 flex items-center justify-between gap-4 text-sm font-medium text-slate-300">
+                  Durability copies / overhead
+                  <output id="storageCopiesOutput" for="storageCopies" class="font-mono text-sm text-acid">3×</output>
+                </span>
+                <input id="storageCopies" name="storageCopies" type="range" min="1" max="5" step="0.5" value="3" class="h-2 w-full cursor-pointer rounded-full bg-slate-800" />
+                <span class="mt-2 block text-xs leading-5 text-slate-500">Use 1× for raw data, or approximate replication / erasure-coding overhead when implementation details are unknown.</span>
+              </label>
+            </form>
+
+            <div id="storageResultGrid" class="grid gap-3 sm:grid-cols-2" aria-live="polite">
+              <article class="rounded-xl border border-acid/20 bg-acid/5 p-5 sm:col-span-2">
+                <p class="text-sm text-acid/70">Retained storage footprint</p>
+                <p id="retainedStorage" class="mt-2 font-mono text-4xl font-semibold tracking-tight text-acid">—</p>
+                <p id="retainedStorageFormula" class="mt-3 font-mono text-xs leading-5 text-acid/50">—</p>
+              </article>
+              <article class="rounded-xl border border-line bg-panel p-5">
+                <p class="text-sm text-slate-500">Raw growth / day</p>
+                <p id="rawStoragePerDay" class="mt-2 font-mono text-2xl font-medium tracking-tight text-white">—</p>
+                <p class="mt-1 text-xs text-slate-600">single logical copy</p>
+              </article>
+              <article class="rounded-xl border border-line bg-panel p-5">
+                <p class="text-sm text-slate-500">Provisioned growth / day</p>
+                <p id="provisionedStoragePerDay" class="mt-2 font-mono text-2xl font-medium tracking-tight text-white">—</p>
+                <p id="storageCopiesNote" class="mt-1 text-xs text-slate-600">—</p>
+              </article>
+              <article class="rounded-xl border border-line bg-panel p-5 sm:col-span-2">
+                <p class="text-sm text-slate-500">Provisioned growth / 30 days</p>
+                <p id="monthlyStorageGrowth" class="mt-2 font-mono text-2xl font-medium tracking-tight text-white">—</p>
+                <p class="mt-1 text-xs text-slate-600">A planning shortcut; excludes deletion, compression, and lifecycle tiering.</p>
+              </article>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="mt-6 rounded-2xl border border-line bg-panel/90 p-5 sm:p-7" aria-labelledby="references-title">
+        <div class="grid gap-7 lg:grid-cols-[0.7fr_1.3fr] lg:items-start">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">04 / Reference</p>
+            <h2 id="references-title" class="mt-2 text-2xl font-semibold tracking-tight text-white">Useful orders of magnitude</h2>
+            <p class="mt-3 max-w-md text-sm leading-6 text-slate-500">
+              Conversation starters, not guarantees. Real capacity depends on query shape, indexes, hardware, payloads, latency targets, and cache hit rate. Benchmark your own path before committing.
+            </p>
+          </div>
+
+          <div class="overflow-hidden rounded-xl border border-line">
+            <div class="grid grid-cols-[1fr_auto] gap-4 border-b border-line bg-ink/80 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 sm:grid-cols-[1.2fr_0.8fr_1fr]">
+              <span>Component</span><span class="hidden sm:block">Typical BOTEC range</span><span>Rule of thumb</span>
+            </div>
+            <div class="divide-y divide-line bg-ink/40 text-sm">
+              <div class="grid grid-cols-[1fr_auto] gap-4 px-4 py-4 sm:grid-cols-[1.2fr_0.8fr_1fr]">
+                <span class="font-medium text-slate-200">Relational database</span><span class="hidden font-mono text-slate-400 sm:block">10²–10⁴ QPS</span><span class="text-right text-slate-500 sm:text-left">~1K QPS baseline</span>
+              </div>
+              <div class="grid grid-cols-[1fr_auto] gap-4 px-4 py-4 sm:grid-cols-[1.2fr_0.8fr_1fr]">
+                <span class="font-medium text-slate-200">Key-value store</span><span class="hidden font-mono text-slate-400 sm:block">10⁴–10⁵ QPS</span><span class="text-right text-slate-500 sm:text-left">~10K QPS baseline</span>
+              </div>
+              <div class="grid grid-cols-[1fr_auto] gap-4 px-4 py-4 sm:grid-cols-[1.2fr_0.8fr_1fr]">
+                <span class="font-medium text-slate-200">In-memory cache</span><span class="hidden font-mono text-slate-400 sm:block">10⁵–10⁶ ops/s</span><span class="text-right text-slate-500 sm:text-left">~100K ops/s baseline</span>
+              </div>
+              <div class="grid grid-cols-[1fr_auto] gap-4 px-4 py-4 sm:grid-cols-[1.2fr_0.8fr_1fr]">
+                <span class="font-medium text-slate-200">Network latency</span><span class="hidden font-mono text-slate-400 sm:block">0.5–150 ms</span><span class="text-right text-slate-500 sm:text-left">same DC → inter-region</span>
+              </div>
+              <div class="grid grid-cols-[1fr_auto] gap-4 px-4 py-4 sm:grid-cols-[1.2fr_0.8fr_1fr]">
+                <span class="font-medium text-slate-200">Monthly volume</span><span class="hidden font-mono text-slate-400 sm:block">daily × 30</span><span class="text-right text-slate-500 sm:text-left">fast planning shortcut</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mt-6 rounded-2xl border border-line bg-panel/90 p-5 sm:p-7" aria-labelledby="interview-title">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">05 / Engineering Manager lens</p>
+          <h2 id="interview-title" class="mt-2 text-2xl font-semibold tracking-tight text-white">Lead the conversation, not every implementation detail.</h2>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
+            Use the estimates to expose constraints and trade-offs. Go deeper only where scale, risk, or the interviewer makes it relevant.
+          </p>
+        </div>
+        <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <article class="rounded-xl border border-line bg-ink/55 p-4">
+            <span class="font-mono text-xs text-acid">01</span>
+            <h3 class="mt-2 font-medium text-slate-200">Frame</h3>
+            <p class="mt-2 text-xs leading-5 text-slate-500">Clarify users, critical journeys, SLOs, constraints, and what is out of scope.</p>
+          </article>
+          <article class="rounded-xl border border-line bg-ink/55 p-4">
+            <span class="font-mono text-xs text-acid">02</span>
+            <h3 class="mt-2 font-medium text-slate-200">Estimate</h3>
+            <p class="mt-2 text-xs leading-5 text-slate-500">Use round numbers to find the likely bottleneck—not to manufacture precision.</p>
+          </article>
+          <article class="rounded-xl border border-line bg-ink/55 p-4">
+            <span class="font-mono text-xs text-acid">03</span>
+            <h3 class="mt-2 font-medium text-slate-200">Design</h3>
+            <p class="mt-2 text-xs leading-5 text-slate-500">Draw the simplest end-to-end path, then scale only the pressured components.</p>
+          </article>
+          <article class="rounded-xl border border-line bg-ink/55 p-4">
+            <span class="font-mono text-xs text-acid">04</span>
+            <h3 class="mt-2 font-medium text-slate-200">Operate</h3>
+            <p class="mt-2 text-xs leading-5 text-slate-500">Cover failure modes, observability, security, cost, and safe rollout at the right depth.</p>
+          </article>
+          <article class="rounded-xl border border-line bg-ink/55 p-4 sm:col-span-2 lg:col-span-1">
+            <span class="font-mono text-xs text-acid">05</span>
+            <h3 class="mt-2 font-medium text-slate-200">Decide</h3>
+            <p class="mt-2 text-xs leading-5 text-slate-500">State trade-offs, ownership boundaries, and what evidence would change the decision.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="mt-6 overflow-hidden rounded-2xl border border-acid/20 bg-panel/90 shadow-glow" aria-labelledby="icon-sheet-title">
+        <div class="grid gap-0 lg:grid-cols-[1fr_auto]">
+          <div class="p-5 sm:p-7">
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-acid">06 / Drawing kit</p>
+            <h2 id="icon-sheet-title" class="mt-2 text-2xl font-semibold tracking-tight text-white">Core system design icons for Excalidraw.</h2>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
+              A deliberately simple canvas with the essential interview components, including single-instance and scaled-out variants. Every icon, name, and short description is grouped—click once, copy, and paste it into your diagram.
+            </p>
+            <a
+              href="./downloads/system-design-cheat-sheet.excalidraw"
+              download="system-design-core-icons.excalidraw"
+              class="group mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-acid px-4 py-3 text-sm font-semibold text-ink transition hover:bg-acid/90 focus:outline-none focus:ring-2 focus:ring-acid focus:ring-offset-2 focus:ring-offset-panel"
+            >
+              <svg class="h-4 w-4 transition-transform group-hover:translate-y-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+              Download Excalidraw icon sheet
+            </a>
+          </div>
+          <div class="flex min-w-64 flex-col justify-center border-t border-line bg-ink/45 px-6 py-5 lg:border-l lg:border-t-0">
+            <span class="font-mono text-3xl font-semibold tracking-tight text-white">20</span>
+            <span class="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">grouped components</span>
+            <span class="mt-5 text-sm leading-6 text-slate-400">No cards. No templates.<br />Just copy-ready icons.</span>
+          </div>
+        </div>
+      </section>
+
+      <aside class="mt-6 flex gap-4 rounded-2xl border border-amber-300/15 bg-amber-300/[0.04] p-5 text-sm leading-6 text-slate-400 sm:p-6">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M8.4 14.5A7 7 0 1 1 15.6 14.5C14.6 15.2 14 16 14 17h-4c0-1-.6-1.8-1.6-2.5Z"/></svg>
+        <p><strong class="font-medium text-slate-200">BOTEC is a compass, not a benchmark.</strong> This model assumes traffic is evenly distributed within the selected peak window and every request has similar cost. Add redundancy, failure domains, read/write mix, cache hit rate, background work, and growth forecasts in a production design.</p>
+      </aside>
+
+      <footer class="flex flex-col gap-2 py-8 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+        <span>BOTEC / Back of the envelope calculator</span>
+        <span>All calculations run locally in your browser.</span>
+      </footer>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
