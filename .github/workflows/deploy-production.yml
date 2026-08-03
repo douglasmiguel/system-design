@@ -1,0 +1,165 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  PROD_SSH_HOST: "172.233.24.151"
+  PROD_SSH_PORT: "22"
+  PROD_SSH_USER: "beedev"
+  PROD_DEPLOY_PATH: "/home/beedev/projects/system-design"
+  PROD_HEALTHCHECK_URL: "https://system-design.douglasmiguel.com.br/"
+
+jobs:
+  build:
+    name: Build and verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CSS
+        run: npm run build:css
+
+      - name: Verify generated CSS is committed
+        run: git diff --exit-code -- styles.css
+
+      - name: Package deployable site
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/release"
+          mkdir -p "$release_dir"
+
+          install -m 0644 \
+            index.html \
+            app.js \
+            styles.css \
+            favicon.png \
+            favicon-transparent.png \
+            "$release_dir/"
+          cp -R downloads "$release_dir/downloads"
+
+          test -s "$release_dir/index.html"
+          test -s "$release_dir/app.js"
+          test -s "$release_dir/styles.css"
+          test -s "$release_dir/downloads/system-design-cheat-sheet.excalidraw"
+          test -s "$release_dir/downloads/system-design-components.excalidrawlib"
+
+      - name: Upload deployable site
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: production-site-${{ github.sha }}
+          path: ${{ runner.temp }}/release
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Deploy production
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: ${{ env.PROD_HEALTHCHECK_URL }}
+    concurrency:
+      group: system-design-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Download deployable site
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: production-site-${{ github.sha }}
+          path: ${{ runner.temp }}/release
+
+      - name: Configure SSH
+        env:
+          PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          PROD_SSH_KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          : "${PROD_SSH_PRIVATE_KEY:?Missing PROD_SSH_PRIVATE_KEY secret}"
+          : "${PROD_SSH_KNOWN_HOSTS:?Missing PROD_SSH_KNOWN_HOSTS secret}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$PROD_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$PROD_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Check deployment target
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o ConnectTimeout=15 \
+            -p "$PROD_SSH_PORT" \
+            "$PROD_SSH_USER@$PROD_SSH_HOST" \
+            "DEPLOY_PATH='$PROD_DEPLOY_PATH' EXPECTED_TARGET='douglasmiguel/system-design' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          marker="$DEPLOY_PATH/.github-deploy-target"
+
+          test -d "$DEPLOY_PATH"
+          test -w "$DEPLOY_PATH"
+          test -f "$marker"
+          test "$(cat "$marker")" = "$EXPECTED_TARGET"
+          REMOTE
+
+      - name: Deploy site
+        run: |
+          set -euo pipefail
+          rsync -az \
+            --checksum \
+            --delete-delay \
+            --delay-updates \
+            --exclude='.github-deploy-target' \
+            -e "ssh -o BatchMode=yes -o IdentitiesOnly=yes -p $PROD_SSH_PORT" \
+            "$RUNNER_TEMP/release/" \
+            "$PROD_SSH_USER@$PROD_SSH_HOST:$PROD_DEPLOY_PATH/"
+
+      - name: Verify deployed files
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -p "$PROD_SSH_PORT" \
+            "$PROD_SSH_USER@$PROD_SSH_HOST" \
+            "test -s '$PROD_DEPLOY_PATH/index.html' && test -s '$PROD_DEPLOY_PATH/app.js' && test -s '$PROD_DEPLOY_PATH/styles.css'"
+
+      - name: Check production URL
+        run: |
+          set -euo pipefail
+          curl \
+            --fail \
+            --show-error \
+            --silent \
+            --location \
+            --retry 3 \
+            --retry-all-errors \
+            --max-time 30 \
+            "$PROD_HEALTHCHECK_URL" > /dev/null
