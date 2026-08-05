@@ -24,7 +24,7 @@ Use the live calculator at
 
 - Semantic HTML
 - Vanilla JavaScript
-- Tailwind CSS 3
+- Tailwind CSS 4
 - GitHub Actions for CI/CD
 
 ## Run locally
@@ -71,8 +71,7 @@ npm run build:css -- --watch
 .
 ├── index.html                  # Page structure and content
 ├── app.js                      # Calculations and UI interactions
-├── tailwind.css                # Tailwind source directives
-├── tailwind.config.js          # Theme and content configuration
+├── tailwind.css                # Tailwind source and theme configuration
 ├── styles.css                  # Generated production stylesheet
 ├── downloads/                  # Excalidraw assets
 └── .github/workflows/          # CI/CD workflow
