@@ -17,7 +17,7 @@ Use the live calculator at
 - Estimate daily transfer and peak bandwidth from request/response payloads.
 - Model retained storage, replication, and monthly growth.
 - Review useful orders of magnitude and interview guidance.
-- Download a system-design cheat sheet and reusable Excalidraw component library.
+- Download an editable Excalidraw component sheet or a Google Drawings-ready PNG component pack.
 - Inspect every calculation directly in the browser; no data is sent to a backend.
 
 ## Technology
@@ -73,10 +73,20 @@ npm run build:css -- --watch
 ├── app.js                      # Calculations and UI interactions
 ├── tailwind.css                # Tailwind source and theme configuration
 ├── styles.css                  # Generated production stylesheet
-├── downloads/                  # Excalidraw assets
+├── downloads/                  # Excalidraw assets and Google Drawings PNG pack
+├── scripts/build-google-drawings-pack.mjs # Rebuilds the Google Drawings ZIP
 └── .github/workflows/          # CI/CD workflow
 ```
 
 `styles.css` is generated but intentionally committed so the repository works
 as a self-contained static site. CI rebuilds it and fails if it differs from
 the committed version.
+
+### Rebuild the Google Drawings pack
+
+The Google Drawings pack contains individually importable RGB PNGs and JPEG
+fallbacks. Rebuild it after changing the component definitions:
+
+```bash
+npm run build:google-drawings-pack
+```
