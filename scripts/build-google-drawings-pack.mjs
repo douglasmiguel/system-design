@@ -48,7 +48,7 @@ function componentSvg([slug, name, description, group, icon]) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
   <title id="title">${name}</title><desc id="desc">${description}</desc>
   <rect x="18" y="58" width="364" height="284" rx="20" fill="#fff" stroke="#cbd5e1" stroke-width="2"/>
-  <g transform="translate(0 25)" fill="none" stroke="${accent}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">${icon}</g>
+  <g transform="translate(100 100) scale(0.5)" fill="none" stroke="${accent}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">${icon}</g>
   <text x="200" y="322" text-anchor="middle" fill="#0f172a" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">${name}</text>
 </svg>`;
 }
