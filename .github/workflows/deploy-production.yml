@@ -126,7 +126,7 @@ jobs:
 
     steps:
       - name: Download deployable site
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@v8.0.2
         with:
           name: production-site-${{ github.sha }}
           path: ${{ runner.temp }}/release
